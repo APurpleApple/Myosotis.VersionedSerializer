@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Numerics;
 using System.Reflection;
 using System.Reflection.PortableExecutable;
@@ -29,7 +30,8 @@ namespace Myosotis.VersionedSerializer
             return ToJson(Serialize(obj));
         }
 
-        internal static JsonWriterOptions JsonWriterOptions = new JsonWriterOptions() { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping, SkipValidation = true };
+        internal static JsonWriterOptions JsonWriterOptions = new JsonWriterOptions() { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping, Indented = true };
+        internal static JsonReaderOptions JsonReaderOptions = new JsonReaderOptions() { CommentHandling = JsonCommentHandling.Skip };
 
 
         public static ReadOnlySpan<byte> ToJson(SerializedObject obj)
@@ -60,17 +62,17 @@ namespace Myosotis.VersionedSerializer
             //reader.Read(); // object start
             //reader.Read(); // property name
             //reader.Read(); // version number
-            ReadNext(ref reader, "read start");
-            ReadNext(ref reader, "read start");
-            ReadNext(ref reader, "read start");
+            reader.Read();
+            reader.Read();
+            reader.Read();
             int version = reader.GetInt32();
 
-            ReadNext(ref reader, "read start");
+            reader.Read();
             //reader.Read(); // property name
 
             SerializedObject obj = new SerializedObject();
             //reader.Read();
-            ReadNext(ref reader, "read start");
+            reader.Read();
             obj.Internal_ReadJson(reader, version);
 
             return obj;
@@ -81,69 +83,28 @@ namespace Myosotis.VersionedSerializer
             return Deserialize<T>(FromBytes(bytes));
         }
 
-        internal static bool ReadNext(ref Utf8JsonReader reader, string context)
-        {
-            bool a = reader.Read();
-            string value = "ERROR";
-            switch (reader.TokenType)
-            {
-                case JsonTokenType.None:
-                case JsonTokenType.StartObject:
-                case JsonTokenType.EndObject:
-                case JsonTokenType.StartArray:
-                case JsonTokenType.EndArray:
-                    value = "#";
-                    break;
-                case JsonTokenType.PropertyName:
-                    value = reader.GetString();
-                    break;
-                case JsonTokenType.String:
-                    value = reader.GetString();
-                    break;
-                case JsonTokenType.Number:
-                    value = reader.GetDecimal().ToString();
-                    break;
-                case JsonTokenType.True:
-                    value = "true";
-                    break;
-                case JsonTokenType.False:
-                    value = "false";
-                    break;
-                case JsonTokenType.Null:
-                    break;
-                default:
-                    break;
-            }
-            Console.WriteLine($"_________________________");
-            Console.WriteLine($"JsonRead: {reader.TokenType}");
-            Console.WriteLine($"   depth: {reader.CurrentDepth}");
-            if (value != "#") Console.WriteLine($"   value: {value}");
-            if (context != "") Console.WriteLine($" context: {context}");
-            return a;
-        } 
-
         public static SerializedObject FromBytes(ReadOnlySpan<byte> bytes)
         {
             ByteReader reader = new ByteReader(bytes);
             SerializedObject obj = new SerializedObject();
             int version = reader.ReadInt32();
-            SerializationType type = (SerializationType)reader.ReadByte();
+            reader.ReadByte();
             obj.Internal_ReadBytes(reader, version);
             return obj;
         }
 
-        public static ReadOnlySpan<byte> SerializeToBytes(object obj)
+        public static ByteWriter SerializeToBytes(object obj)
         {
             return ToBytes(Serialize(obj));
         }
 
-        public static ReadOnlySpan<byte> ToBytes(SerializedObject obj)
+        public static ByteWriter ToBytes(SerializedObject obj)
         {
             int size = obj.Internal_GetByteSize();
-            using ByteWriter writer = new ByteWriter((uint)size);
-            writer.Write(latestVersion);
+            ByteWriter writer = new ByteWriter((uint)size);
+            writer.Write(10);
             obj.Internal_WriteBytes(writer);
-            return writer.GetSpan();
+            return writer;
         }
 
         public static void SetLogOutputFunction(Action<string, LogPriority> func)
@@ -228,14 +189,13 @@ namespace Myosotis.VersionedSerializer
 
         internal static SerializedItem Internal_CreateItemFromJson(Utf8JsonReader reader, int version)
         {
-            reader.Read();
             Utf8JsonReader itemReader = reader;
             SerializedItem item = null;
-            switch (reader.TokenType)
+            switch (itemReader.TokenType)
             {
                 case JsonTokenType.StartObject:
                     reader.Read();
-                    if (reader.TokenType == JsonTokenType.Comment && reader.GetComment() == "#Dictionary")
+                    if (reader.TokenType == JsonTokenType.PropertyName && reader.GetString() == "IsDictionary")
                     {
                         item = new SerializedDictionary();
                     }
@@ -263,7 +223,7 @@ namespace Myosotis.VersionedSerializer
 
             if (item == null)
             {
-                Internal_Log("Couldn't create serialized item from json", LogPriority.error);
+                Internal_Log($"Couldn't create serialized item from json {reader.TokenType}", LogPriority.error);
             }
 
             item?.Internal_ReadJson(itemReader, version);
@@ -272,7 +232,8 @@ namespace Myosotis.VersionedSerializer
 
         internal static SerializedItem Internal_CreateItemFromJsonPropertyName(string property, int version)
         {
-            Utf8JsonReader reader = new Utf8JsonReader(Encoding.UTF8.GetBytes(property));
+            Utf8JsonReader reader = new Utf8JsonReader(Encoding.UTF8.GetBytes($"\"{property}\""), JsonReaderOptions);
+            reader.Read();
             return Internal_CreateItemFromJson(reader, version);
         }
 
@@ -344,7 +305,7 @@ namespace Myosotis.VersionedSerializer
                 else if (genericType == typeof(Dictionary<,>))
                 {
                     SerializedDictionary dict = new SerializedDictionary();
-                    //dict.FromDictionary(obj);
+                    dict.FromDictionary(obj);
                     return dict;
                 }
             }
@@ -366,7 +327,6 @@ namespace Myosotis.VersionedSerializer
 
         public static void SetSerializer(Type type, Type serializerType, bool isDefault)
         {
-            Console.WriteLine($"Started setting serializer for type {type}");
             VersionedSerializer serializer = (isDefault ? Activator.CreateInstance(serializerType, [type]) : Activator.CreateInstance(serializerType)) as VersionedSerializer;
             if (serializer == null)
             {
@@ -375,7 +335,6 @@ namespace Myosotis.VersionedSerializer
             }
             serializers[type] = serializer;
             serializer.RegisterVersionSignatures();
-            Console.WriteLine($"Finished setting serializer for type {type}");
         }
         public static void SetSerializer<T>(Type serializerType)
         {

@@ -88,7 +88,7 @@ namespace Myosotis.VersionedSerializer
 
                 foreach (var item in values)
                 {
-                    dict.Add(keys[item.Key].Internal_Get(type.GenericTypeArguments[1]), item.Value.Internal_Get(type.GenericTypeArguments[1]));
+                    dict.Add((dynamic)keys[item.Key].Internal_Get(type.GenericTypeArguments[0]), (dynamic)item.Value.Internal_Get(type.GenericTypeArguments[1]));
                 }
 
                 return dict;
@@ -131,8 +131,10 @@ namespace Myosotis.VersionedSerializer
             {
                 SerializationType keyType = (SerializationType)reader.ReadByte();
                 SerializedItem key = VersionedConvert.Internal_CreateItemFromEnum(keyType);
+                key.Internal_ReadBytes(reader, version);
                 SerializationType itemType = (SerializationType)reader.ReadByte();
                 SerializedItem value = VersionedConvert.Internal_CreateItemFromEnum(itemType);
+                value.Internal_ReadBytes(reader, version);
                 int hash = key.GetHashCode();
                 values.Add(hash, value);
                 keys.Add(hash, key);
@@ -149,15 +151,22 @@ namespace Myosotis.VersionedSerializer
                     if (reader.TokenType == JsonTokenType.PropertyName)
                     {
                         string keyJson = reader.GetString();
+                        if (keyJson == "IsDictionary")
+                        {
+                            reader.Skip();
+                            reader.Read();
+                            continue;
+                        }
+
                         SerializedItem key = VersionedConvert.Internal_CreateItemFromJsonPropertyName(keyJson, version);
+                        reader.Read();
                         SerializedItem item = VersionedConvert.Internal_CreateItemFromJson(reader, version);
                         reader.Skip();
-                        Console.WriteLine($"JSONREAD: Adding item to dictionary");
                         int hash = key.GetHashCode();
                         keys.Add(hash, key);
                         values.Add(hash, item);
                     }
-                    VersionedConvert.ReadNext(ref reader, "dictionary");
+                    reader.Read();
                 }
             }
             else
@@ -170,11 +179,13 @@ namespace Myosotis.VersionedSerializer
         internal override void Internal_WriteJson(Utf8JsonWriter writer)
         {
             writer.WriteStartObject();
-            writer.WriteCommentValue("#Dictionary");
+            writer.WriteString("IsDictionary", "true");
 
             foreach (var item in values)
             {
-                writer.WritePropertyName(VersionedConvert.Internal_ToJsonPropertyName(keys[item.Key]));
+                ReadOnlySpan<byte> propertyName = VersionedConvert.Internal_ToJsonPropertyName(keys[item.Key]);
+                propertyName = propertyName.Slice(1, propertyName.Length - 2);
+                writer.WritePropertyName(propertyName);
                 item.Value.Internal_WriteJson(writer);
             }
 

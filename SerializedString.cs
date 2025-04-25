@@ -44,7 +44,7 @@ namespace Myosotis.VersionedSerializer
                 return value;
             }
 
-            VersionedConvert.Internal_Log($"Cannot convert {type} to string", LogPriority.error);
+            VersionedConvert.Internal_Log($"Cannot convert string to {type}", LogPriority.error);
             return default;
         }
 

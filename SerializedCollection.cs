@@ -22,10 +22,10 @@ namespace Myosotis.VersionedSerializer
 
         internal object Internal_ToArray(Type type)
         {
-            dynamic array = Array.CreateInstanceFromArrayType(type, Count);
+            dynamic array = Array.CreateInstance(type, Count);
             for (int i = 0; i < Count; i++)
             {
-                array[i] = items[i].Internal_Get(type);
+                array[i] = (dynamic)items[i].Internal_Get(type);
             }
             return array;
         }
@@ -35,7 +35,7 @@ namespace Myosotis.VersionedSerializer
             dynamic list = Activator.CreateInstance(typeof(List<>).MakeGenericType(type));
             foreach (var item in items)
             {
-                list.Add(item.Internal_Get(type));
+                list.Add((dynamic)item.Internal_Get(type));
             }
             return list;
         }
@@ -45,7 +45,7 @@ namespace Myosotis.VersionedSerializer
             dynamic hashSet = Activator.CreateInstance(typeof(HashSet<>).MakeGenericType(type));
             foreach (var item in items)
             {
-                hashSet.Add(item.Internal_Get(type));
+                hashSet.Add((dynamic)item.Internal_Get(type));
             }
             return hashSet;
         }
@@ -229,14 +229,14 @@ namespace Myosotis.VersionedSerializer
         {
             if (reader.TokenType == JsonTokenType.StartArray)
             {
-                VersionedConvert.ReadNext(ref reader, "collection");
+                reader.Read();
 
                 while (reader.TokenType != JsonTokenType.EndArray)
                 {
                     SerializedItem item = VersionedConvert.Internal_CreateItemFromJson(reader, version);
                     reader.Skip();
                     items.Add(item);
-                    VersionedConvert.ReadNext(ref reader, "collection next item");
+                    reader.Read();
                 }
             }
             else

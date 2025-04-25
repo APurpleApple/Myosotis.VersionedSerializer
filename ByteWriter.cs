@@ -8,13 +8,13 @@ using System.Threading.Tasks;
 
 namespace Myosotis.VersionedSerializer
 {
-    internal unsafe class ByteWriter : IDisposable
+    public unsafe class ByteWriter : IDisposable
     {
         int cursor = 0;
         nint pointer;
         uint size = 0;
 
-        public unsafe ByteWriter(uint size)
+        internal unsafe ByteWriter(uint size)
         {
             this.size = size;
             pointer = (nint)NativeMemory.Alloc(size);
@@ -25,11 +25,11 @@ namespace Myosotis.VersionedSerializer
             return new ReadOnlySpan<byte>((void*)pointer, (int)size);
         }
 
-        public static int GetStringByteCount(string s)
+        internal static int GetStringByteCount(string s)
         {
             return 2 + Encoding.Unicode.GetByteCount(s);
         }
-        public void Write(string s)
+        internal void Write(string s)
         {
             byte[] bytes = Encoding.Unicode.GetBytes(s);
             Write((ushort)bytes.Length);
@@ -39,7 +39,7 @@ namespace Myosotis.VersionedSerializer
             }
         }
 
-        public void Write(short v)
+        internal void Write(short v)
         {
             short* position = (short*)(pointer + cursor);
             *position = v;
@@ -49,7 +49,7 @@ namespace Myosotis.VersionedSerializer
             }
             cursor += 2;
         }
-        public void Write(ushort v)
+        internal void Write(ushort v)
         {
             ushort* position = (ushort*)(pointer + cursor);
             *position = v;
@@ -59,7 +59,7 @@ namespace Myosotis.VersionedSerializer
             }
             cursor += 2;
         }
-        public void Write(int v)
+        internal void Write(int v)
         {
             int* position = (int*)(pointer + cursor);
             *position = v;
@@ -69,7 +69,7 @@ namespace Myosotis.VersionedSerializer
             }
             cursor += 4;
         }
-        public void Write(uint v)
+        internal void Write(uint v)
         {
             uint* position = (uint*)(pointer + cursor);
             *position = v;
@@ -79,7 +79,7 @@ namespace Myosotis.VersionedSerializer
             }
             cursor += 4;
         }
-        public void Write(float v)
+        internal void Write(float v)
         {
             float* position = (float*)(pointer + cursor);
             *position = v;
@@ -89,7 +89,7 @@ namespace Myosotis.VersionedSerializer
             }
             cursor += 4;
         }
-        public void Write(double v)
+        internal void Write(double v)
         {
             double* position = (double*)(pointer + cursor);
             *position = v;
@@ -99,7 +99,7 @@ namespace Myosotis.VersionedSerializer
             }
             cursor += 8;
         }
-        public void Write(decimal v)
+        internal void Write(decimal v)
         {
             decimal* position = (decimal*)(pointer + cursor);
             *position = v;
@@ -109,7 +109,7 @@ namespace Myosotis.VersionedSerializer
             }
             cursor += 16;
         }
-        public void Write(char v)
+        internal void Write(char v)
         {
             char* position = (char*)(pointer + cursor);
             *position = v;
@@ -119,19 +119,19 @@ namespace Myosotis.VersionedSerializer
             }
             cursor += 2;
         }
-        public void Write(bool v)
+        internal void Write(bool v)
         {
             bool* position = (bool*)(pointer + cursor);
             *position = v;
             cursor += 1;
         }
-        public void Write(byte v)
+        internal void Write(byte v)
         {
             byte* position = (byte*)(pointer + cursor);
             *position = v;
             cursor += 1;
         }
-        public void Write(long v)
+        internal void Write(long v)
         {
             long* position = (long*)(pointer + cursor);
             *position = v;
@@ -141,7 +141,7 @@ namespace Myosotis.VersionedSerializer
             }
             cursor += 8;
         }
-        public void Write(ulong v)
+        internal void Write(ulong v)
         {
             ulong* position = (ulong*)(pointer + cursor);
             *position = v;

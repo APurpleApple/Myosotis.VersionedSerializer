@@ -191,12 +191,12 @@ namespace Myosotis.VersionedSerializer
                     if (reader.TokenType == JsonTokenType.PropertyName)
                     {
                         string key = reader.GetString();
+                        reader.Read();
                         SerializedItem item = VersionedConvert.Internal_CreateItemFromJson(reader, version);
                         reader.Skip();
-                        Console.WriteLine($"JSONREAD: Adding field {key} to object {uuid}");
                         fields.Add(key, item);
                     }
-                    VersionedConvert.ReadNext(ref reader, "object " + uuid);
+                    reader.Read();
                 }
             }
             else
@@ -210,7 +210,6 @@ namespace Myosotis.VersionedSerializer
             writer.WriteStartObject();
             foreach (var item in fields)
             {
-                Console.WriteLine("writing json key: " + item.Key);
                 writer.WritePropertyName(item.Key);
                 item.Value.Internal_WriteJson(writer);
             }

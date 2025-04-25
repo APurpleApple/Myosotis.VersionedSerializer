@@ -64,7 +64,6 @@ namespace Myosotis.VersionedSerializer
                     signature.Add(field.Key, field.Value.cachedType);
                 }
                 version.Value.signature = signature;
-                //Console.WriteLine($"Added signature for version {version.Key} of type {type}");
             }
         }
 
@@ -116,8 +115,6 @@ namespace Myosotis.VersionedSerializer
 
         public virtual void Serialize(object obj, SerializedObject serialized)
         {
-            Console.WriteLine($"Serializing {obj.GetType()}");
-
             VersionedConvert.Update(type, VersionedConvert.LatestVersion, serialized);
 
             foreach (var item in serialized.fields)
