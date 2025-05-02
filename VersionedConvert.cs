@@ -30,7 +30,7 @@ namespace Myosotis.VersionedSerializer
             return ToJson(Serialize(obj));
         }
 
-        internal static JsonWriterOptions JsonWriterOptions = new JsonWriterOptions() { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping, Indented = true };
+        internal static JsonWriterOptions JsonWriterOptions = new JsonWriterOptions() { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
         internal static JsonReaderOptions JsonReaderOptions = new JsonReaderOptions() { CommentHandling = JsonCommentHandling.Skip };
 
 
@@ -232,7 +232,14 @@ namespace Myosotis.VersionedSerializer
 
         internal static SerializedItem Internal_CreateItemFromJsonPropertyName(string property, int version)
         {
-            Utf8JsonReader reader = new Utf8JsonReader(Encoding.UTF8.GetBytes($"\"{property}\""), JsonReaderOptions);
+            Console.WriteLine(property);
+
+            if (Char.IsLetter(property[0]))
+            {
+                property = $"\"{property}\"";
+            }
+
+            Utf8JsonReader reader = new Utf8JsonReader(Encoding.UTF8.GetBytes(property), JsonReaderOptions);
             reader.Read();
             return Internal_CreateItemFromJson(reader, version);
         }
@@ -245,7 +252,13 @@ namespace Myosotis.VersionedSerializer
             item.Internal_WriteJson(writer);
 
             writer.Flush();
-            return stream.ToArray().AsSpan();
+            Span<byte> span = stream.ToArray().AsSpan();
+
+            if (item is SerializedString)
+            {
+                span = span.Slice(1, span.Length - 2);
+            }
+            return span;
         }
 
         internal static SerializedItem Internal_ConvertToItem(object obj)

@@ -119,33 +119,13 @@ namespace Myosotis.VersionedSerializer
 
             foreach (var item in serialized.fields)
             {
-                if (item.Value is SerializedString str)
+                string fieldName = item.Key;
+                FieldInfo? field = type.GetField(fieldName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.GetField);
+                if (field != null)
                 {
-                    string fieldName = str.Internal_Get<string>();
-                    FieldInfo? field = type.GetField(fieldName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.GetField);
-                    if (field != null)
-                    {
-                        serialized.SetField(fieldName, item.Value.Internal_FromField(field, obj));
-                    }
+                    serialized.SetField(fieldName, item.Value.Internal_FromField(field, obj));
                 }
             }
-
-            //foreach (var item in serialized.primitiveFields)
-            //{
-            //    FieldInfo? field = type.GetField(item.Key, BindingFlags.Instance | BindingFlags.Public | BindingFlags.GetField);
-            //    if (field != null)
-            //    {
-            //        serialized.SetField(item.Key, field.GetValue(obj));
-            //    }
-            //}
-            //foreach (var item in serialized.objectFields)
-            //{
-            //    FieldInfo? field = type.GetField(item.Key, BindingFlags.Instance | BindingFlags.Public | BindingFlags.GetField);
-            //    if (field != null)
-            //    {
-            //        serialized.SetField(item.Key, VersionedConvert.Serialize(field.GetValue(obj)));
-            //    }
-            //}
         }
 
         public virtual object Deserialize(SerializedObject serialized, Type type)
@@ -154,34 +134,13 @@ namespace Myosotis.VersionedSerializer
 
             foreach (var item in serialized.fields)
             {
-                if (item.Value is SerializedString str)
+                string fieldName = item.Key;
+                FieldInfo? field = type.GetField(fieldName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.GetField);
+                if (field != null)
                 {
-                    string fieldName = str.Internal_Get<string>();
-                    FieldInfo? field = type.GetField(fieldName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.GetField);
-                    if (field != null)
-                    {
-                        item.Value.Internal_ToField(field, result);
-                    }
+                    item.Value.Internal_ToField(field, result);
                 }
             }
-
-            //foreach (var item in serialized.primitiveFields)
-            //{
-            //    FieldInfo? field = type.GetField(item.Key, BindingFlags.Instance | BindingFlags.Public | BindingFlags.GetField);
-            //    if (field != null)
-            //    {
-            //        field.SetValue(result, item.Value);
-            //    }
-            //}
-            //foreach (var item in serialized.objectFields)
-            //{
-            //    FieldInfo? field = type.GetField(item.Key, BindingFlags.Instance | BindingFlags.Public | BindingFlags.GetField);
-            //    if (field != null)
-            //    {
-            //        Type fieldType = field.FieldType;
-            //        field.SetValue(result, VersionedConvert.Deserialize(fieldType, item.Value));
-            //    }
-            //}
             return result;
         }
 

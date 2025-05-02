@@ -25,7 +25,8 @@ namespace Myosotis.VersionedSerializer
                 VersionedConvert.Internal_Log($"Type {dictType} is not a dictionary.", LogPriority.error);
                 return;
             }
-
+            values.Clear();
+            keys.Clear();
             cachedType = dictType;
             foreach (var item in dict)
             {
@@ -55,12 +56,13 @@ namespace Myosotis.VersionedSerializer
 
         internal override SerializedItem Internal_FromField(FieldInfo field, object obj)
         {
-            return new SerializedBool((bool)field.GetValue(obj));
+            FromDictionary(field.GetValue(obj));
+            return this;
         }
 
         internal override void Internal_ToField(FieldInfo field, object obj)
         {
-            throw new NotImplementedException();
+            field.SetValue(obj, Internal_Get(field.FieldType));
         }
 
         internal override void Internal_Update(Type expectedType, int targetVersion)
@@ -184,7 +186,7 @@ namespace Myosotis.VersionedSerializer
             foreach (var item in values)
             {
                 ReadOnlySpan<byte> propertyName = VersionedConvert.Internal_ToJsonPropertyName(keys[item.Key]);
-                propertyName = propertyName.Slice(1, propertyName.Length - 2);
+
                 writer.WritePropertyName(propertyName);
                 item.Value.Internal_WriteJson(writer);
             }

@@ -20,6 +20,21 @@ namespace Myosotis.VersionedSerializer
             cachedType = type;
         }
 
+        public T[] ToArray<T>()
+        {
+            return (T[])Internal_ToArray(typeof(T));
+        }
+
+        public List<T> ToList<T>()
+        {
+            return (List<T>)Internal_ToList(typeof(T));
+        }
+
+        public HashSet<T> ToHashSet<T>()
+        {
+            return (HashSet<T>)Internal_ToHashSet(typeof(T));
+        }
+
         internal object Internal_ToArray(Type type)
         {
             dynamic array = Array.CreateInstance(type, Count);
