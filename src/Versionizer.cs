@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System.Collections;
+using System.Collections.Generic;
 using System.Reflection;
 using System.Xml.Linq;
 
@@ -869,30 +870,22 @@ namespace Myosotis.VersionedSerializer
                 int l = collection.length;
                 index = collection.next;
 
-                if (genericTypeDef == typeof(List<>))
+                if (t.IsAssignableTo(typeof(IList)))
                 {
-                    dynamic list = Activator.CreateInstance(t);
+                    object list = Activator.CreateInstance(t);
 
-                    for (int i = 0; i < l; i++)
+                    if (list is IList iList)
                     {
-                        SerializedCollectionElement element = collectionElements[index];
-                        dynamic v = Internal_ConvertThingTo(elementType, element.type, element.index);
-                        list.Add(v);
-                        index = element.next;
+                        for (int i = 0; i < l; i++)
+                        {
+                            SerializedCollectionElement element = collectionElements[index];
+                            dynamic v = Internal_ConvertThingTo(elementType, element.type, element.index);
+                            iList.Add(v);
+                            index = element.next;
+                        }
                     }
+                    
                     return list;
-                }
-                if (genericTypeDef == typeof(HashSet<>))
-                {
-            
-                }
-                if (genericTypeDef == typeof(Queue<>))
-                {
-            
-                }
-                if (genericTypeDef == typeof(Stack<>))
-                {
-            
                 }
             }
 
@@ -930,9 +923,8 @@ namespace Myosotis.VersionedSerializer
                 Type elementType = t.GenericTypeArguments[0];
                 SerializedTypes elementSerializedType = Internal_FindSerializedType(elementType);
 
-                if (genericTypeDef == typeof(List<>))
+                if (value is IList list)
                 {
-                    dynamic list = value;
                     int index = -1;
                     int length = list.Count;
 
