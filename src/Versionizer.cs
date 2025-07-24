@@ -355,15 +355,29 @@ namespace Myosotis.VersionedSerializer
         internal int Internal_ReadCollectionBytes(ByteReader reader)
         {
             int length = reader.ReadInt32();
-            int next = -1;
+            int lastIndex = 0;
+            SerializedCollectionElement last = new();
+            int collectionIndex = collections.Add(new SerializedCollection(-1, length));
 
             for (int i = 0; i < length; i++)
             {
                 SerializedTypes type = (SerializedTypes)reader.ReadByte();
                 int index = Internal_ReadBytes(reader, type);
-                next = collectionElements.Add(new SerializedCollectionElement(type, index, next));
+                SerializedCollectionElement next = new SerializedCollectionElement(type, index, -1);
+                int nextIndex = collectionElements.Add(next);
+
+                if (i == 0)
+                {
+                    collections[collectionIndex] = new SerializedCollection(nextIndex, length);
+                }
+                else
+                {
+                    collectionElements[lastIndex] = new SerializedCollectionElement(last.type, last.index, nextIndex);
+                }
+
+                lastIndex = nextIndex;
+                last = next;
             }
-            int collectionIndex = collections.Add(new SerializedCollection(next, length));
 
             return collectionIndex;
         }
