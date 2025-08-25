@@ -45,6 +45,7 @@ namespace Myosotis.VersionedSerializer
             chars.Clear();
             bools.Clear();
             latestVersion = 0;
+            version = 0;
         }
 
         #region ITransformer
