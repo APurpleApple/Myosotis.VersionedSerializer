@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Xml.Linq;
@@ -71,6 +72,10 @@ namespace Myosotis.VersionedSerializer
         {
             return (T)Internal_GetObjectFieldValue(typeof(T), name, obj.id);
         }
+        public object GetFieldValue(ObjectID obj, string name, Type t)
+        {
+            return Internal_GetObjectFieldValue(t, name, obj.id);
+        }
         public T GetFieldValue<T>(FieldID field)
         {
             SerializedField fieldData = objectFields[field.id];
@@ -80,6 +85,23 @@ namespace Myosotis.VersionedSerializer
             }
 
             throw new Exception($"Can't convert field of serialized type {fieldData.type} to type {typeof(T)}");
+        }
+
+        public T GetFieldValueOrDefault<T>(ObjectID obj, string name, T defaultValue)
+        {
+            if (!Internal_TryFindField(name, obj.id, out int fieldIndex))
+            {
+                return defaultValue;
+            }
+
+            SerializedField field = objectFields[fieldIndex];
+
+            if (!Internal_IsCompatible(typeof(T), field.type))
+            {
+                return defaultValue;
+            }
+
+            return (T)Internal_ConvertThingTo(typeof(T), field.type, field.index);
         }
         public T GetCollectionElement<T>(CollectionID collection, int index)
         {
@@ -396,9 +418,9 @@ namespace Myosotis.VersionedSerializer
                 int valueIndex = Internal_ReadBytes(reader, valueType);
                 next = dictionaryEntries.Add(new SerializedDictionaryEntry(valueType, valueIndex, keyType, keyIndex, next, keyHash));
             }
-            int collectionIndex = collections.Add(new SerializedCollection(next, length));
+            int dictionaryIndex = dictionaries.Add(new SerializedDictionary(length, next));
 
-            return collectionIndex;
+            return dictionaryIndex;
         }
 
         internal void Internal_WriteBytes(ByteWriter writer, SerializedTypes type, int index)
@@ -624,6 +646,8 @@ namespace Myosotis.VersionedSerializer
             }
 
             VersionedSerializer serializer = Internal_GetSerializer(type);
+            Internal_Update(type, index);
+
             return serializer.Deserialize(this, type, new ObjectID(index));
         }
 
@@ -742,6 +766,26 @@ namespace Myosotis.VersionedSerializer
             }
 
             throw new Exception($"Couldn't find object member with name {name}");
+        }
+
+        internal bool Internal_TryFindField(string name, int objectID, out int fieldIndex)
+        {
+            SerializedObject obj = objects[objectID];
+            int result = objectID;
+            int hash = name.GetHashCode();
+            fieldIndex = obj.next;
+
+            while (fieldIndex != -1)
+            {
+                SerializedField field = objectFields[fieldIndex];
+                if (strings[field.name].hash == hash)
+                {
+                    return true;
+                }
+                fieldIndex = field.next;
+            }
+
+            return false;
         }
 
         internal int Internal_FindField(string name, int objectID)
@@ -1082,6 +1126,7 @@ namespace Myosotis.VersionedSerializer
                     dynamic value = Internal_ConvertThingTo(elementType, entry.type, entry.index);
 
                     dict.Add(key, value);
+                    index = entry.next;
                 }
 
                 return dict;
@@ -1269,7 +1314,7 @@ namespace Myosotis.VersionedSerializer
         {
             if (!Internal_IsCompatible(t, type))
             {
-                throw new Exception($"Cannot serialized type {type} to type {t}");
+                throw new Exception($"Cannot convert serialized type {type} to type {t}");
             }
 
             switch (type)

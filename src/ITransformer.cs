@@ -11,7 +11,9 @@ namespace Myosotis.VersionedSerializer
         public void SetFieldValue<T>(ObjectID obj, string name, T value);
         public void SetFieldValue<T>(FieldID field, T value);
         public T GetFieldValue<T>(ObjectID obj, string name);
+        public object GetFieldValue(ObjectID obj, string name, Type type);
         public T GetFieldValue<T>(FieldID field);
+        public T GetFieldValueOrDefault<T>(ObjectID obj, string name, T defaultValue);
         public T GetCollectionElement<T>(CollectionID collection, int index);
         public ObjectID CreateObject<T>();
         public void AddCollectionElement<T>(CollectionID collection, T value);

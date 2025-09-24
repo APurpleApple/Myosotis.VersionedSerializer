@@ -129,6 +129,7 @@ namespace Myosotis.VersionedSerializer
                 converter.context = Context.versioning;
 
                 converter.objectFields[oldFieldID.id] = newField;
+                converter.objectFields.Delete(newFieldID.id);
                 converter.Internal_DeleteThing(oldField.type, oldField.index);
             }
         }
