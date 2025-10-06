@@ -34,7 +34,7 @@ namespace Myosotis.VersionedSerializer
             return Deserialize(serializer, id);
         }
 
-        public virtual T Deserialize(ISerializer serializer, ObjectID id)
+        public virtual T Deserialize(ISerializer serializer, ObjectID id, T? existingValue = default)
         {
             return (T)base.Deserialize(serializer, typeof(T), id);
         }
@@ -94,6 +94,11 @@ namespace Myosotis.VersionedSerializer
             {
                 version.signature.Add(field.Name.GetHashCode(), new Version.FieldInfo() { type = field.FieldType, name = field.Name});
             }
+        }
+
+        public Version GetInitVersion()
+        {
+            return versions[0];
         }
 
         public Version NewVersion(int version)

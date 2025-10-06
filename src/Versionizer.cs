@@ -1222,6 +1222,8 @@ namespace Myosotis.VersionedSerializer
                 }
                 serializer = serializers[type];
 
+
+
                 // also loading all of the object's fields types recursively
                 foreach (var field in serializer.versions[serializer.latestVersion].signature)
                 {
@@ -1231,6 +1233,7 @@ namespace Myosotis.VersionedSerializer
                     }
                 }
             }
+
             latestVersion = int.Max(serializer.latestVersion, latestVersion);
             return serializer;
         }
