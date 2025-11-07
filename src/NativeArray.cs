@@ -77,6 +77,7 @@ namespace Myosotis.VersionedSerializer
         public void Clear()
         {
             Count = 0;
+            availableIndices.Clear();
         }
 
         private void ResizeTo(int size)

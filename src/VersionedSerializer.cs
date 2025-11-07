@@ -75,9 +75,16 @@ namespace Myosotis.VersionedSerializer
             return versions[bestVersion];
         }
 
-        internal Type GetFieldTypeAtVersion(int hash, int version)
+        internal bool TryGetFieldTypeAtVersion(int hash, int version, out Type type)
         {
-            return GetLatestCompatibleVersion(version).signature[hash].type;
+            var v = GetLatestCompatibleVersion(version);
+            if (v.signature.TryGetValue(hash, out var field))
+            {
+                type = field.type;
+                return true;
+            }
+            type = null;
+            return false;
         }
 
         public VersionedSerializer(Type type)

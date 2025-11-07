@@ -45,7 +45,7 @@ namespace Myosotis.VersionedSerializer
             numbers.Clear();
             chars.Clear();
             bools.Clear();
-            latestVersion = 0;
+            //latestVersion = 0;
             version = 0;
         }
 
@@ -506,9 +506,9 @@ namespace Myosotis.VersionedSerializer
             ByteReader reader = new(bytes);
             int version = reader.ReadInt32();
             Versionizer converter = staticConverter;
-            staticConverter.Clear();
-            converter.Internal_ReadBytes(reader, SerializedTypes.@object);
+            converter.Clear();
             converter.version = version;
+            converter.Internal_ReadBytes(reader, SerializedTypes.@object);
             converter.Internal_Update(typeof(T), 0);
 
             return (T)converter.Internal_DeserializeObject(typeof(T), 0);
@@ -517,7 +517,7 @@ namespace Myosotis.VersionedSerializer
         public static Span<byte> ToBytes(object obj)
         {
             Versionizer converter = staticConverter;
-            staticConverter.Clear();
+            converter.Clear();
             converter.Internal_SerializeObject(obj);
             ByteWriter writer = new();
             writer.Write(converter.latestVersion);
@@ -1153,8 +1153,10 @@ namespace Myosotis.VersionedSerializer
 
                     if (field.type == SerializedTypes.@object)
                     {
-                        Type fieldType = serializer.GetFieldTypeAtVersion(strings[field.name].hash, i);
-                        Internal_UpdateTo(fieldType, field.index, i);
+                        if (serializer.TryGetFieldTypeAtVersion(strings[field.name].hash, i, out Type fieldType))
+                        {
+                            Internal_UpdateTo(fieldType, field.index, i);
+                        }
                     }
                 }
                 if (serializer.versionMapping.TryGetValue(i, out var v))
@@ -1180,8 +1182,10 @@ namespace Myosotis.VersionedSerializer
 
                     if (field.type == SerializedTypes.@object)
                     {
-                        Type fieldType = serializer.GetFieldTypeAtVersion(strings[field.name].hash, i);
-                        Internal_UpdateTo(fieldType, field.index, i);
+                        if (serializer.TryGetFieldTypeAtVersion(strings[field.name].hash, i, out Type fieldType))
+                        {
+                            Internal_UpdateTo(fieldType, field.index, i);
+                        }
                     }
                 }
                 if (serializer.versionMapping.TryGetValue(i, out var v))
@@ -1225,7 +1229,7 @@ namespace Myosotis.VersionedSerializer
 
 
                 // also loading all of the object's fields types recursively
-                foreach (var field in serializer.versions[serializer.latestVersion].signature)
+                foreach (var field in serializer.versions[serializer.versionMapping[serializer.latestVersion]].signature)
                 {
                     if (field.Value.type.IsClass | field.Value.type.IsAnsiClass)
                     {
