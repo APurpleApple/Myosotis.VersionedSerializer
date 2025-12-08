@@ -14,8 +14,9 @@ namespace Myosotis.VersionedSerializer
         internal List<UpdateAction> actions = new();
         internal Dictionary<int, FieldInfo> signature = new();
 
-        internal Version(Version? previous)
+        internal Version(Version? previous, int number)
         {
+            this.number = number;
             if (previous != null)
             {
                 foreach (var item in previous.signature)

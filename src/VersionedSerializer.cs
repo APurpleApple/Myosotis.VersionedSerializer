@@ -72,7 +72,7 @@ namespace Myosotis.VersionedSerializer
                 }
             }
 
-            return versions[bestVersion];
+            return versions[versionMapping[bestVersion]];
         }
 
         internal bool TryGetFieldTypeAtVersion(int hash, int version, out Type type)
@@ -110,14 +110,42 @@ namespace Myosotis.VersionedSerializer
 
         public Version NewVersion(int version)
         {
-            if (latestVersion >= version) throw new Exception("Cannot register version {version} after version {latestVersion}, please register versions in ascending order.");
+            //if (latestVersion >= version) throw new Exception("Cannot register version {version} after version {latestVersion}, please register versions in ascending order.");
 
-            Version v = new Version(previous);
-            versions.Add(v);
-            versionMapping.Add(version, versions.Count - 1);
-            previous = v;
-            latestVersion = version;
-            return v;
+            if (latestVersion >= version)
+            {
+                Version prev = versions.Count > 0 ? GetLatestCompatibleVersion(version) : null;
+                Version v = new Version(prev, version);
+
+                if (prev != null && version <= latestVersion)
+                {
+                    int prevIndex = versionMapping[prev.number]+1;
+                    versions.Insert(prevIndex, v);
+                    foreach (var item in versionMapping)
+                    {
+                        if (item.Value >= prevIndex)
+                        {
+                            versionMapping[item.Key] = item.Value + 1;
+                        }
+                    }
+                    versionMapping.Add(version, prevIndex);
+                }
+                else
+                {
+                    versions.Add(v);
+                    versionMapping.Add(version, versions.Count - 1);
+                }
+                return v;
+            }
+            else
+            {
+                Version prev = versions.Count > 0 ? versions.Last() : null;
+                Version v = new Version(prev, version);
+                versions.Add(v);
+                versionMapping.Add(version, versions.Count - 1);
+                latestVersion = version;
+                return v;
+            }
         }
 
         public virtual void Serialize(object obj, ISerializer serializer, ObjectID id)
