@@ -2,12 +2,17 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Reflection.PortableExecutable;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Xml.Linq;
 
 namespace Myosotis.VersionedSerializer
 {
     public class Versionizer : ISerializer
     {
+        const int nullIndex = -1;
+
         internal NativeArray<SerializedObject> objects = new();
         internal NativeArray<SerializedField> objectFields = new();
 
@@ -135,7 +140,8 @@ namespace Myosotis.VersionedSerializer
                 next = collectionElements[next].next;
             }
 
-            SerializedTypes sType = Internal_FindSerializedType(typeof(T));
+            SerializedTypes sType = value == null ? SerializedTypes.@null : Internal_FindSerializedType(typeof(T));
+
             int newElement = collectionElements.Add(new SerializedCollectionElement(sType, Internal_RegisterThing(sType, value), -1));
 
             if (last == -1)
@@ -161,7 +167,7 @@ namespace Myosotis.VersionedSerializer
 
             SerializedCollectionElement element = collectionElements[next];
             Internal_DeleteThing(element.type, element.index);
-            SerializedTypes sType = Internal_FindSerializedType(typeof(T));
+            SerializedTypes sType = value == null ? SerializedTypes.@null : Internal_FindSerializedType(typeof(T));
             collectionElements[next] = new SerializedCollectionElement(sType, Internal_RegisterThing(sType, value), element.next);
         }
         public void RemoveCollectionElement<T>(CollectionID collection, int index)
@@ -322,6 +328,7 @@ namespace Myosotis.VersionedSerializer
         #region ISerializer
         public void AddField<T>(ObjectID obj, string name, T value)
         {
+            if (value == null) return;
             SerializedTypes sType = Internal_FindSerializedType(value.GetType());
             Internal_AttachFieldToObject(name, sType, Internal_RegisterThing(sType, value), obj.id);
         }
@@ -336,7 +343,179 @@ namespace Myosotis.VersionedSerializer
 
         #endregion
 
-        #region Read/Write
+        #region Read/Write JSON
+        internal int Internal_ReadJSON(JsonElement element)
+        {
+            switch (element.ValueKind)
+            {
+                case JsonValueKind.Object:
+                    return Internal_ReadObjectJSON(element);
+                case JsonValueKind.Array:
+                    return Internal_ReadCollectionJSON(element);
+                case JsonValueKind.String:
+                    return Internal_RegisterString(element.GetString());
+                case JsonValueKind.Number:
+                    return numbers.Add(element.GetDouble());
+                case JsonValueKind.True:
+                    return bools.Add(true);
+                case JsonValueKind.False:
+                    return bools.Add(false);
+            }
+
+
+            return -1;
+        }
+
+        internal SerializedTypes Internal_GetTypeFromJSON(JsonElement element)
+        {
+            switch (element.ValueKind)
+            {
+                case JsonValueKind.Object:
+                    return SerializedTypes.@object;
+                case JsonValueKind.Array:
+                    return SerializedTypes.collection;
+                case JsonValueKind.String:
+                    return SerializedTypes.@string;
+                case JsonValueKind.Number:
+                    return SerializedTypes.number;
+                case JsonValueKind.True:
+                    return SerializedTypes.@bool;
+                case JsonValueKind.False:
+                    return SerializedTypes.@bool;
+                case JsonValueKind.Null:
+                    return SerializedTypes.@null;
+            }
+
+            throw new Exception($"Cant translate json element kind {element.ValueKind} to serialized type");
+        }
+
+        internal int Internal_ReadObjectJSON(JsonElement element)
+        {
+            int objIndex = objects.Add(new SerializedObject(-1, 0, version));
+
+            foreach (var prop in element.EnumerateObject())
+            {
+                Internal_AttachFieldToObject(prop.Name, Internal_GetTypeFromJSON(element), Internal_ReadJSON(element), objIndex);
+            }
+
+            return objIndex;
+        }
+
+        internal int Internal_ReadCollectionJSON(JsonElement element)
+        {
+            int length = element.GetArrayLength();
+            int lastIndex = -1;
+            SerializedCollectionElement last = new();
+            int collectionIndex = collections.Add(new SerializedCollection(-1, length));
+
+            foreach (var item in element.EnumerateArray())
+            {
+                SerializedTypes type = Internal_GetTypeFromJSON(element);
+                int index = Internal_ReadJSON(element);
+                SerializedCollectionElement next = new SerializedCollectionElement(type, index, -1);
+                int nextIndex = collectionElements.Add(next);
+
+                if (lastIndex == -1)
+                {
+                    collections[collectionIndex] = new SerializedCollection(nextIndex, length);
+                }
+                else
+                {
+                    collectionElements[lastIndex] = new SerializedCollectionElement(last.type, last.index, nextIndex);
+                }
+
+                lastIndex = nextIndex;
+                last = next;
+            }
+
+            return collectionIndex;
+        }
+
+
+        internal void Internal_WriteJSON(Utf8JsonWriter writer, SerializedTypes type, int index)
+        {
+            switch (type)
+            {
+                case SerializedTypes.@object:
+                    Internal_WriteObjectJSON(writer, index);
+                    break;
+                case SerializedTypes.@collection:
+                    Internal_WriteCollectionJSON(writer, index);
+                    break;
+                case SerializedTypes.@string:
+                    writer.WriteStringValue(Internal_GetString(index));
+                    break;
+                case SerializedTypes.@dictionary:
+                    Internal_WriteDictionaryJSON(writer, index);
+                    break;
+                case SerializedTypes.@number:
+                    writer.WriteNumberValue(numbers[index]);
+                    break;
+                case SerializedTypes.@bool:
+                    writer.WriteBooleanValue(bools[index]);
+                    break;
+                case SerializedTypes.@char:
+                    writer.WriteStringValue(chars[index].ToString());
+                    break;
+                case SerializedTypes.@null:
+                    writer.WriteNullValue();
+                    break;
+            }
+        }
+        internal void Internal_WriteObjectJSON(Utf8JsonWriter writer, int index)
+        {
+            SerializedObject obj = objects[index];
+
+            writer.WriteStartObject();
+            int nextField = obj.next;
+            while (nextField != -1)
+            {
+                SerializedField field = objectFields[nextField];
+                writer.WritePropertyName(Internal_GetString(field.name));
+                Internal_WriteJSON(writer, field.type, field.index);
+                nextField = field.next;
+            }
+            writer.WriteEndObject();
+        }
+
+        internal void Internal_WriteCollectionJSON(Utf8JsonWriter writer, int index)
+        {
+            SerializedCollection collection = collections[index];
+
+            writer.WriteStartArray();
+            int nextElement = collection.next;
+            while (nextElement != -1)
+            {
+                SerializedCollectionElement element = collectionElements[nextElement];
+                Internal_WriteJSON(writer, element.type, element.index);
+                nextElement = element.next;
+            }
+            writer.WriteEndArray();
+        }
+
+        internal void Internal_WriteDictionaryJSON(Utf8JsonWriter writer, int index)
+        {
+            SerializedDictionary dictionary = dictionaries[index];
+
+            writer.WriteStartArray();
+            int nextEntry = dictionary.next;
+            while (nextEntry != -1)
+            {
+                writer.WriteStartObject();
+                SerializedDictionaryEntry entry = dictionaryEntries[nextEntry];
+                writer.WritePropertyName("key");
+                Internal_WriteJSON(writer, entry.keyType, entry.keyIndex);
+                writer.WritePropertyName("value");
+                Internal_WriteJSON(writer, entry.type, entry.index);
+                nextEntry = entry.next;
+                writer.WriteEndObject();
+            }
+            writer.WriteEndArray();
+        }
+
+        #endregion
+
+        #region Read/Write bytes
         internal int Internal_ReadBytes(ByteReader reader, SerializedTypes type)
         {
             switch (type)
@@ -363,7 +542,7 @@ namespace Myosotis.VersionedSerializer
         internal int Internal_ReadObjectBytes(ByteReader reader)
         {
             int length = reader.ReadInt32();
-            int objIndex = objects.Add(new SerializedObject(-1, length, version));
+            int objIndex = objects.Add(new SerializedObject(-1, 0, version));
 
             for (int i = 0; i < length; i++)
             {
@@ -449,6 +628,8 @@ namespace Myosotis.VersionedSerializer
                 case SerializedTypes.@char:
                     writer.Write(chars[index]);
                     break;
+                case SerializedTypes.@null:
+                    break;
             }
         }
 
@@ -523,6 +704,38 @@ namespace Myosotis.VersionedSerializer
             writer.Write(converter.latestVersion);
             converter.Internal_WriteObjectBytes(writer, 0);
             return writer.ToSpan();
+        }
+
+        public static T FromJSON<T>(string json)
+        {
+            JsonDocument jsonDocument = JsonDocument.Parse(json);
+            int version = jsonDocument.RootElement.GetProperty("version").GetInt32();
+            Versionizer converter = staticConverter;
+            converter.Clear();
+            converter.version = version;
+            converter.Internal_ReadJSON(jsonDocument.RootElement.GetProperty("data"));
+            converter.Internal_Update(typeof(T), 0);
+
+            return (T)converter.Internal_DeserializeObject(typeof(T), 0);
+        }
+
+
+        System.Buffers.ArrayBufferWriter<byte> JsonBuffer = new System.Buffers.ArrayBufferWriter<byte>();
+        public static Span<byte> ToJSON(object obj)
+        {
+            Versionizer converter = staticConverter;
+            converter.Clear();
+            converter.Internal_SerializeObject(obj);
+
+            converter.JsonBuffer.Clear();
+            Utf8JsonWriter writer = new Utf8JsonWriter(converter.JsonBuffer);
+            writer.WriteStartObject();
+            writer.WriteNumber("version", converter.latestVersion);
+            writer.WritePropertyName("data");
+            converter.Internal_WriteObjectJSON(writer, 0);
+            writer.WriteEndObject();
+
+            return converter.JsonBuffer.GetSpan();
         }
 
         public static void SetSerializer(Type type, Type serializerType)
@@ -971,7 +1184,8 @@ namespace Myosotis.VersionedSerializer
 
                 for (int i = length -1; i >= 0; i--)
                 {
-                    index = collectionElements.Add(new SerializedCollectionElement(elementSerializedType, Internal_RegisterThing(elementSerializedType, array[i]), index));
+                    SerializedTypes sType = array[i] == null ? SerializedTypes.@null : elementSerializedType;
+                    index = collectionElements.Add(new SerializedCollectionElement(sType, Internal_RegisterThing(sType, array[i]), index));
                 }
 
                 return collections.Add(new SerializedCollection(index, length));
@@ -989,7 +1203,8 @@ namespace Myosotis.VersionedSerializer
 
                     for (int i = length - 1; i >= 0; i--)
                     {
-                        index = collectionElements.Add(new SerializedCollectionElement(elementSerializedType, Internal_RegisterThing(elementSerializedType, list[i]), index));
+                        SerializedTypes sType = list[i] == null ? SerializedTypes.@null : elementSerializedType;
+                        index = collectionElements.Add(new SerializedCollectionElement(sType, Internal_RegisterThing(sType, list[i]), index));
                     }
 
                     return collections.Add(new SerializedCollection(index, length));
@@ -1243,6 +1458,8 @@ namespace Myosotis.VersionedSerializer
         }
         internal int Internal_RegisterThing(SerializedTypes sType, object value)
         {
+            if (value == null) return nullIndex;
+
             switch (sType)
             {
                 case SerializedTypes.@object:
@@ -1340,6 +1557,8 @@ namespace Myosotis.VersionedSerializer
                     return bools[index];
                 case SerializedTypes.@char:
                     return chars[index];
+                case SerializedTypes.@null:
+                    return null;
             }
 
             throw new Exception($"Could not convert type {t} to any serialized type");
@@ -1381,6 +1600,8 @@ namespace Myosotis.VersionedSerializer
                     return t == typeof(bool);
                 case SerializedTypes.@char:
                     return t == typeof(char);
+                case SerializedTypes.@null:
+                    return true;
             }
 
             return false;
@@ -1400,6 +1621,7 @@ namespace Myosotis.VersionedSerializer
         @number,
         @bool,
         @char,
+        @null
     }
 
     internal enum Context
