@@ -10,15 +10,19 @@ namespace Myosotis.VersionedSerializer
     {
         public void SetFieldValue<T>(ObjectID obj, string name, T value);
         public void SetFieldValue<T>(FieldID field, T value);
+        public void DereferenceField(ObjectID obj, string name);
         public T GetFieldValue<T>(ObjectID obj, string name);
         public object GetFieldValue(ObjectID obj, string name, Type type);
         public T GetFieldValue<T>(FieldID field);
         public T GetFieldValueOrDefault<T>(ObjectID obj, string name, T defaultValue);
+        public bool TryGetFieldValue<T>(ObjectID obj, string name, out T value);
         public T GetCollectionElement<T>(CollectionID collection, int index);
         public ObjectID CreateObject<T>();
         public void AddCollectionElement<T>(CollectionID collection, T value);
         public void SetCollectionElement<T>(CollectionID collection, T value, int index);
         public void RemoveCollectionElement<T>(CollectionID collection, int index);
+        public void ClearCollection(CollectionID collection, bool destroyElements = true);
+        public void ClearDictionary(DictionaryID dictionary, bool destroyElements = true);
         public int GetLength(CollectionID collection);
         public TValue GetDictionaryValue<TKey, TValue>(DictionaryID dictionary, TKey key);
         public void SetDictionaryValue<TKey, TValue>(DictionaryID dictionary, TKey key, TValue value);

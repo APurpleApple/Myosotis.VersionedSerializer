@@ -6,6 +6,7 @@ using System.Reflection.PortableExecutable;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Xml.Linq;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace Myosotis.VersionedSerializer
 {
@@ -91,6 +92,25 @@ namespace Myosotis.VersionedSerializer
 
             throw new Exception($"Can't convert field of serialized type {fieldData.type} to type {typeof(T)}");
         }
+        public bool TryGetFieldValue<T>(ObjectID obj, string name, out T value)
+        {
+            if (!Internal_TryFindField(name, obj.id, out int fieldIndex))
+            {
+                value = default;
+                return false;
+            }
+
+            SerializedField field = objectFields[fieldIndex];
+
+            if (!Internal_IsCompatible(typeof(T), field.type))
+            {
+                value = default;
+                return false;
+            }
+
+            value = (T)Internal_ConvertThingTo(typeof(T), field.type, field.index);
+            return true;
+        }
 
         public T GetFieldValueOrDefault<T>(ObjectID obj, string name, T defaultValue)
         {
@@ -151,6 +171,7 @@ namespace Myosotis.VersionedSerializer
             else
             {
                 SerializedCollectionElement lastElement = collectionElements[last];
+                collections[collection.id] = new SerializedCollection(collectionData.next, collectionData.length + 1);
                 collectionElements[last] = new SerializedCollectionElement(lastElement.type, lastElement.index, newElement);
             }
         }
@@ -169,6 +190,43 @@ namespace Myosotis.VersionedSerializer
             Internal_DeleteThing(element.type, element.index);
             SerializedTypes sType = value == null ? SerializedTypes.@null : Internal_FindSerializedType(typeof(T));
             collectionElements[next] = new SerializedCollectionElement(sType, Internal_RegisterThing(sType, value), element.next);
+        }
+
+        public void ClearDictionary(DictionaryID dictionaryID, bool destroyElements = true)
+        {
+            SerializedDictionary dictionary = dictionaries[dictionaryID.id];
+            int entryIndex = dictionary.next;
+
+            while (entryIndex != -1)
+            {
+                SerializedDictionaryEntry entry = dictionaryEntries[entryIndex];
+                int next = entry.next;
+                if (destroyElements) Internal_DeleteThing(entry.type, entry.index);
+                Internal_DeleteThing(entry.keyType, entry.keyIndex);
+                dictionaryEntries.Delete(entryIndex);
+                entryIndex = next;
+            }
+
+            dictionaries[dictionaryID.id] = new SerializedDictionary(0, -1);
+        }
+
+        public void ClearCollection(CollectionID collectionID, bool destroyElements = true)
+        {
+            SerializedCollection collection = collections[collectionID.id];
+            int elementIndex = collection.next;
+
+            while (elementIndex != -1)
+            {
+                SerializedCollectionElement element = collectionElements[elementIndex];
+                collectionElements.Delete(elementIndex);
+                if (destroyElements)
+                {
+                    Internal_DeleteThing(element.type, element.index);
+                }
+                elementIndex = element.next;
+            }
+
+            collections[collectionID.id] = new SerializedCollection(-1, 0);
         }
         public void RemoveCollectionElement<T>(CollectionID collection, int index)
         {
@@ -476,6 +534,7 @@ namespace Myosotis.VersionedSerializer
                 nextField = field.next;
             }
             writer.WriteEndObject();
+            writer.Flush();
         }
 
         internal void Internal_WriteCollectionJSON(Utf8JsonWriter writer, int index)
@@ -693,6 +752,25 @@ namespace Myosotis.VersionedSerializer
             converter.Internal_Update(typeof(T), 0);
 
             return (T)converter.Internal_DeserializeObject(typeof(T), 0);
+
+            //try
+            //{
+            //    return (T)converter.Internal_DeserializeObject(typeof(T), 0);
+            //}
+            //catch (Exception e)
+            //{
+            //    Utf8JsonWriter writer = new Utf8JsonWriter(converter.JsonBuffer);
+            //    writer.WriteStartObject();
+            //    writer.WriteNumber("version", converter.latestVersion);
+            //    writer.WritePropertyName("data");
+            //    converter.Internal_WriteObjectJSON(writer, 0);
+            //    writer.WriteEndObject();
+            //    writer.Flush();
+            //    File.WriteAllBytes("serialLog.txt", converter.JsonBuffer.WrittenSpan.ToArray());
+            //    File.WriteAllLines("serialStackTrace.txt",[e.Message, e.StackTrace]);
+            //    throw e;
+            //}
+
         }
 
         public static Span<byte> ToBytes(object obj)
@@ -734,8 +812,9 @@ namespace Myosotis.VersionedSerializer
             writer.WritePropertyName("data");
             converter.Internal_WriteObjectJSON(writer, 0);
             writer.WriteEndObject();
+            writer.Flush();
 
-            return converter.JsonBuffer.GetSpan().Slice(0, writer.BytesPending);
+            return converter.JsonBuffer.WrittenSpan;
         }
 
         public static void SetSerializer(Type type, Type serializerType)
@@ -784,6 +863,31 @@ namespace Myosotis.VersionedSerializer
             SerializedField field = objectFields[fieldIndex];
             Internal_DeleteString(field.name);
             objectFields[fieldIndex] = new SerializedField(field.type, field.index, Internal_RegisterString(newName), field.next);
+        }
+
+        public void DereferenceField(ObjectID objectID, string name)
+        {
+            SerializedObject obj = objects[objectID.id];
+            if (obj.next == -1) return;
+
+            int parentFieldIndex = Internal_FindFieldPrevious(name, objectID.id);
+
+            if (parentFieldIndex == -1)
+            {
+                SerializedField field = objectFields[obj.next];
+                objectFields.Delete(obj.next);
+                Internal_DeleteString(field.name);
+                objects[objectID.id] = new SerializedObject(field.next, obj.length - 1, obj.version);
+            }
+            else
+            {
+                SerializedField parentField = objectFields[parentFieldIndex];
+                SerializedField field = objectFields[parentField.next];
+                int parentFieldNewNext = field.next;
+                objectFields.Delete(parentField.next);
+                Internal_DeleteString(field.name);
+                objectFields[parentFieldIndex] = new SerializedField(parentField.type, parentField.index, parentField.name, parentFieldNewNext);
+            }
         }
 
         internal void Internal_RemoveObjectField(string name, int objectID)
