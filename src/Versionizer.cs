@@ -721,7 +721,7 @@ namespace Myosotis.VersionedSerializer
 
 
         System.Buffers.ArrayBufferWriter<byte> JsonBuffer = new System.Buffers.ArrayBufferWriter<byte>();
-        public static Span<byte> ToJSON(object obj)
+        public static ReadOnlySpan<byte> ToJSON(object obj)
         {
             Versionizer converter = staticConverter;
             converter.Clear();
@@ -735,7 +735,7 @@ namespace Myosotis.VersionedSerializer
             converter.Internal_WriteObjectJSON(writer, 0);
             writer.WriteEndObject();
 
-            return converter.JsonBuffer.GetSpan();
+            return converter.JsonBuffer.GetSpan().Slice(0, writer.BytesPending);
         }
 
         public static void SetSerializer(Type type, Type serializerType)
